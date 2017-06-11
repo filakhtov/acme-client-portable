@@ -601,8 +601,10 @@ netproc(int kfd, int afd, int Cfd, int cfd, int dfd, int rfd,
 
 	if ( ! sandbox_before()) 
 		goto out;
+#ifndef USE_CURL
 	else if ( ! dropfs(PATH_VAR_EMPTY))
 		goto out;
+#endif
 	else if ( ! dropprivs())
 		goto out;
 	else if ( ! sandbox_after(0))

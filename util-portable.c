@@ -22,7 +22,6 @@
 
 #include <err.h>
 #include <pwd.h>
-#include <tls.h>
 #include <unistd.h>
 
 #include "extern.h"
