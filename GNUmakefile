@@ -12,7 +12,6 @@ OBJS 	 = acctproc.o \
 	   dbg.o \
 	   dnsproc.o \
 	   fileproc.o \
-	   http.o \
 	   jsmn.o \
 	   json.o \
 	   keyproc.o \
@@ -121,10 +120,18 @@ endif
 
 # If you need to change anything below here, it's a bug.
 
+ifdef USE_OPENSSL
+OBJS += http-openssl.o
+CFLAGS += -DUSE_OPENSSL
+else
+OBJS += http.o
+LIBADD += -ltls
+endif
+
 all: acme-client
 
 acme-client: $(OBJS)
-	$(CC) -o $@ $(OBJS) $(LDFLAGS) -ltls -lssl -lcrypto $(LIBADD)
+	$(CC) -o $@ $(OBJS) $(LDFLAGS) -lssl -lcrypto $(LIBADD)
 
 # This is for synchronising from -portable to the master.
 rmerge:
@@ -182,6 +189,8 @@ $(OBJS): extern.h config.h
 rsa.o acctproc.o keyproc.o: rsa.h
 
 http.o netproc.o: http.h
+
+http-openssl.o http.o netproc.o: http.h
 
 jsmn.o json.o: jsmn.h
 
