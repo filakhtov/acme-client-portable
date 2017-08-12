@@ -197,13 +197,13 @@ void httpxfer_free(struct httpxfer *p) {
     free(p);
 }
 
-struct httpxfer *http_open(const struct http *http, const void *p, size_t psz)
+struct httpxfer *http_open(const struct http *http, const void *post, size_t post_size)
 {
     struct httpxfer *result = NULL;
     char *request = NULL;
     int bytes_written;
 
-    if (p == NULL) {
+    if (post == NULL) {
         bytes_written = asprintf(&request, "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n", http->path, http->host);
     } else {
         bytes_written = asprintf(
@@ -211,7 +211,7 @@ struct httpxfer *http_open(const struct http *http, const void *p, size_t psz)
             "POST %s HTTP/1.0\r\nHost: %s\r\nContent-Length: %zu\r\n\r\n",
             http->path,
             http->host,
-            psz
+            post_size
         );
     }
 
@@ -226,8 +226,11 @@ struct httpxfer *http_open(const struct http *http, const void *p, size_t psz)
         goto fail;
     }
 
-    if (p != NULL) {
-        BIO_puts(http->web, p);
+    if (post != NULL) {
+        bytes_written = BIO_puts(http->web, (const char *)post);
+        if (bytes_written < 0) {
+            goto fail;
+        }
     }
 
     result = calloc(1, sizeof(struct httpxfer));
