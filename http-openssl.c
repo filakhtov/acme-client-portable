@@ -100,32 +100,42 @@ struct http *http_alloc(
     char *socket = NULL;
     struct http *result = NULL;
 
-    web = BIO_new_ssl_connect(cfg->ssl_config);
-    if(web == NULL) {
-        openssl_error_report("Unable to create SSL BIO");
-
-        goto fail;
-    }
-
     if (asprintf(&socket, "%s:%d", addrs->ip, port) == -1) {
         warn("Unable to allocate memory for socket address.\n");
 
         goto fail;
     }
 
-    res = BIO_set_conn_hostname(web, socket);
+    if (port == 443) {
+        web = BIO_new_ssl_connect(cfg->ssl_config);
+        if(web == NULL) {
+            openssl_error_report("Unable to create SSL BIO");
+
+            goto fail;
+        }
+
+        res = BIO_set_conn_hostname(web, socket);
+        if (res != 1) {
+            openssl_error_report("Unable to set BIO socket");
+
+            goto fail;
+        }
+
+        ssl = ssl_connect(web, host);
+        if (ssl == NULL) {
+            goto fail;
+        }
+    } else {
+        web = BIO_new_connect(socket);
+        if (web == NULL) {
+            openssl_error_report("Unable to connect");
+
+            goto fail;
+        }
+    }
+
     free(socket);
-    if (res != 1) {
-        openssl_error_report("Unable to set BIO socket");
-
-        goto fail;
-    }
-
-    ssl = ssl_connect(web, host);
-    if (ssl == NULL) {
-
-        goto fail;
-    }
+    socket = NULL;
 
     result = calloc(1, sizeof(struct http));
     if (result == NULL) {
@@ -154,6 +164,10 @@ struct http *http_alloc(
     return result;
 
 fail:
+    if (socket != NULL) {
+        free(socket);
+    }
+
     if (result != NULL) {
         http_free(result);
     } else if (web != NULL) {
