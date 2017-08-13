@@ -116,7 +116,7 @@ struct http *http_alloc(
     res = BIO_set_conn_hostname(web, socket);
     free(socket);
     if (res != 1) {
-        openssl_error_report("Unable to connect BIO");
+        openssl_error_report("Unable to set BIO socket");
 
         goto fail;
     }
@@ -200,7 +200,7 @@ void httpxfer_free(struct httpxfer *p) {
 struct httpxfer *http_open(const struct http *http, const void *post, size_t post_size)
 {
     struct httpxfer *result = NULL;
-    char *request = NULL;
+    void *request = NULL;
     int bytes_written;
 
     if (post == NULL) {
@@ -221,13 +221,13 @@ struct httpxfer *http_open(const struct http *http, const void *post, size_t pos
         goto fail;
     }
 
-    bytes_written = BIO_puts(http->web, request);
+    bytes_written = BIO_write(http->web, request, bytes_written);
     if (bytes_written < 0) {
         goto fail;
     }
 
     if (post != NULL) {
-        bytes_written = BIO_puts(http->web, (const char *)post);
+        bytes_written = BIO_write(http->web, post, post_size);
         if (bytes_written < 0) {
             goto fail;
         }
@@ -284,20 +284,19 @@ void http_get_free(struct httpget *g)
     free(g);
 }
 
-char *http_read(const struct http *http, struct httpxfer *xfer, size_t *sz)
+void *http_read(const struct http *http, struct httpxfer *xfer, size_t *sz)
 {
     size_t len = 0;
-    char *response = NULL;
+    void *response = NULL;
     int read_size;
 
     do {
-        char buff[500];
+        char buff[1024];
 
         read_size = BIO_read(http->web, buff, sizeof(buff));
         if (read_size < 0) {
             goto fail;
         }
-        buff[read_size] = '\0';
 
         if (read_size > 0) {
             char *tmp = realloc(response, len + read_size);
@@ -312,7 +311,6 @@ char *http_read(const struct http *http, struct httpxfer *xfer, size_t *sz)
         }
     } while (read_size > 0 || BIO_should_retry(http->web));
 
-    response[len] = '\0';
     *sz = (size_t)len;
 
     return response;
@@ -364,12 +362,12 @@ char *http_body_read(const struct http *http, struct httpxfer *xfer, size_t *sz)
     body_start_position = body_start - xfer->response + 4;
     body_size = xfer->response_size - body_start_position;
 
-    body = calloc(body_size + 1, sizeof(char));
+    body = calloc(body_size, sizeof(char));
     if (body == NULL) {
         return NULL;
     }
 
-    strncpy(body, xfer->response + body_start_position, body_size);
+    memcpy(body, xfer->response + body_start_position, body_size);
     *sz = body_size;
 
     return body;
@@ -404,6 +402,7 @@ char *header_part(const char **headers_buff, char needle)
 
     part = tmp;
     strncpy(part, buff, end - buff);
+    part[end - buff] = '\0';
 
     while(end != 0 && isspace(*(++end)));
 
@@ -544,8 +543,8 @@ struct httpget *http_get(
     struct http *h = NULL;
     struct httpxfer *x = NULL;
     struct httphead *headers = NULL;
-    char *body = NULL;
-    char *response = NULL;
+    void *body = NULL;
+    void *response = NULL;
     size_t body_size;
     size_t headers_count;
     size_t response_size;
